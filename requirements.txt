@@ -19,3 +19,4 @@ uvicorn
 streamlit
 requests
 httpx
+prometheus-fastapi-instrumentator

@@ -29,3 +29,9 @@ def test_action_inconnue_renvoie_404():
 def test_parametre_days_invalide_renvoie_422():
     response = client.get("/prices/MC.PA?days=0")
     assert response.status_code == 422
+
+
+def test_metriques_exposees():
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    assert "marketpulse_last_price_age_days" in response.text

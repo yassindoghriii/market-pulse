@@ -1,0 +1,50 @@
+groups:
+  - name: marketpulse
+    rules:
+      - alert: ApiIndisponible
+        expr: up{job="api"} == 0
+        for: 1m
+        labels:
+          severity: critique
+        annotations:
+          summary: "L'API MarketPulse ne répond plus"
+
+      - alert: ApiLente
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_highr_seconds_bucket[5m])) by (le)) > 0.5
+        for: 5m
+        labels:
+          severity: avertissement
+        annotations:
+          summary: "95 % des requêtes dépassent 500 ms (exigence du cahier des charges)"
+
+      - alert: ErreursServeur
+        expr: sum(rate(http_requests_total{status="5xx"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: critique
+        annotations:
+          summary: "L'API renvoie des erreurs serveur (5xx)"
+
+      - alert: DonneesPerimees
+        expr: marketpulse_last_price_age_days > 4
+        for: 10m
+        labels:
+          severity: critique
+        annotations:
+          summary: "Aucune nouvelle séance chargée depuis plus de 4 jours : vérifier Airflow"
+
+      - alert: DisqueBientotPlein
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/var/lib"} / node_filesystem_size_bytes{mountpoint="/var/lib"}) * 100 > 85
+        for: 5m
+        labels:
+          severity: avertissement
+        annotations:
+          summary: "Disque de la machine Docker rempli à plus de 85 %"
+
+      - alert: MacEspaceDisqueFaible
+        expr: node_filesystem_avail_bytes{job="mac",mountpoint="/System/Volumes/Data"} < 10e9
+        for: 5m
+        labels:
+          severity: critique
+        annotations:
+          summary: "Moins de 10 Go libres sur le poste : Docker risque de passer en lecture seule"
