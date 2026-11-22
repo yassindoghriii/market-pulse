@@ -1,5 +1,6 @@
 """API MarketPulse : cours, sentiment de la presse et prédiction de tendance."""
 from contextlib import asynccontextmanager
+from datetime import date, timedelta
 
 import mlflow
 import mlflow.xgboost
@@ -102,8 +103,10 @@ def prices(ticker: str, days: int = Query(30, ge=1, le=800)):
 @app.get("/sentiment/{ticker}", response_model=list[SentimentPoint])
 def sentiment(ticker: str, days: int = Query(30, ge=1, le=365)):
     ticker = check_ticker(ticker)
+    since = (date.today() - timedelta(days=days)).isoformat()
     rows = mongo_db()["articles_clean"].aggregate([
-        {"$match": {"ticker": ticker, "sentiment_score": {"$ne": None}}},
+        {"$match": {"ticker": ticker, "sentiment_score": {"$ne": None},
+                    "published_date": {"$gte": since}}},
         {"$group": {"_id": "$published_date",
                     "sentiment_mean": {"$avg": "$sentiment_score"},
                     "news_count": {"$sum": 1}}},
