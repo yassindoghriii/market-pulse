@@ -1,35 +1,34 @@
 """API MarketPulse : cours, sentiment de la presse et prédiction de tendance."""
+import json
+import os
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
+from pathlib import Path
 
-import mlflow
-import mlflow.xgboost
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
-from mlflow import MlflowClient
 from pydantic import BaseModel
 from sqlalchemy import text
+from xgboost import XGBClassifier
 
-from src.collect.prices import TICKERS
+from src.config import TICKERS
 from src.db import mongo_db, pg_engine
 from src.ml.dataset import build_dataset
 
-MODEL_NAME = "marketpulse-direction"
-MODEL_ALIAS = "production"
+MODEL_DIR = Path(os.getenv("MODEL_DIR", "models/production"))
 DISCLAIMER = "Outil d'aide à la décision, pas un conseil en investissement."
 state: dict = {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Au démarrage : charge une seule fois le modèle étiqueté 'production'."""
-    mlflow.set_tracking_uri("sqlite:///mlflow.db")
-    client = MlflowClient()
-    version = client.get_model_version_by_alias(MODEL_NAME, MODEL_ALIAS)
-    state["model"] = mlflow.xgboost.load_model(f"models:/{MODEL_NAME}@{MODEL_ALIAS}")
-    state["features"] = client.get_run(version.run_id).data.params["features"].split(",")
-    state["version"] = str(version.version)
-    state["engine"] = pg_engine()
+    """Au démarrage : charge une seule fois le modèle de production exporté."""
+    metadata = json.loads((MODEL_DIR / "metadata.json").read_text(encoding="utf-8"))
+    model = XGBClassifier()
+    model.load_model(str(MODEL_DIR / "model.json"))
+    state.update(model=model, features=metadata["features"],
+                 version=metadata["version"], model_name=metadata["model_name"],
+                 engine=pg_engine())
     yield
     state.clear()
 
@@ -78,7 +77,8 @@ def check_ticker(ticker: str) -> str:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "model": MODEL_NAME, "model_version": state.get("version")}
+    return {"status": "ok", "model": state.get("model_name"),
+            "model_version": state.get("version")}
 
 
 @app.get("/tickers")
@@ -110,12 +110,10 @@ def sentiment(ticker: str, days: int = Query(30, ge=1, le=365)):
         {"$group": {"_id": "$published_date",
                     "sentiment_mean": {"$avg": "$sentiment_score"},
                     "news_count": {"$sum": 1}}},
-        {"$sort": {"_id": -1}},
-        {"$limit": days},
+        {"$sort": {"_id": 1}},
     ])
-    points = [{"date": r["_id"], "sentiment_mean": round(r["sentiment_mean"], 4),
-               "news_count": r["news_count"]} for r in rows]
-    return points[::-1]
+    return [{"date": r["_id"], "sentiment_mean": round(r["sentiment_mean"], 4),
+             "news_count": r["news_count"]} for r in rows]
 
 
 @app.get("/predict/{ticker}", response_model=Prediction)

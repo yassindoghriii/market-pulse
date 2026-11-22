@@ -7,7 +7,7 @@ from urllib.parse import quote_plus
 
 import feedparser
 
-from src.collect.prices import TICKERS
+from src.config import TICKERS
 
 RSS_URL = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
 RAW_DIR = Path("data/raw/news")
