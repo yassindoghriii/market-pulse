@@ -1,4 +1,5 @@
 """Entraînement du modèle hausse/baisse, comparé à la référence naïve, suivi dans MLflow."""
+import argparse
 import logging
 
 import mlflow
@@ -32,14 +33,22 @@ def evaluate(y_true, y_pred, y_proba=None) -> dict:
 
 
 def main() -> None:
-    df = build_dataset().dropna(subset=FEATURES + [TARGET]).sort_values("date")
+    parser = argparse.ArgumentParser(description="Entraîne le modèle hausse/baisse.")
+    parser.add_argument("--sans-sentiment", action="store_true",
+                        help="exclut les variables de sentiment (étude d'ablation)")
+    args = parser.parse_args()
+    features = [f for f in FEATURES
+                if not (args.sans_sentiment and f in ("sentiment_mean", "news_count"))]
+    run_name = "xgboost_v2_sans_sentiment" if args.sans_sentiment else "xgboost_v1"
+
+    df = build_dataset().dropna(subset=features + [TARGET]).sort_values("date")
 
     # Découpage chronologique : jamais de futur dans l'entraînement
     dates = df["date"].drop_duplicates().sort_values().reset_index(drop=True)
     cutoff = dates.iloc[int(len(dates) * (1 - TEST_SHARE))]
     train, test = df[df["date"] < cutoff], df[df["date"] >= cutoff]
-    X_train, y_train = train[FEATURES], train[TARGET].astype(int)
-    X_test, y_test = test[FEATURES], test[TARGET].astype(int)
+    X_train, y_train = train[features], train[TARGET].astype(int)
+    X_test, y_test = test[features], test[TARGET].astype(int)
     log.info("Entraînement : %d lignes avant le %s | Test : %d lignes",
              len(train), cutoff.date(), len(test))
 
@@ -49,18 +58,18 @@ def main() -> None:
 
     mlflow.set_tracking_uri("sqlite:///mlflow.db")
     mlflow.set_experiment(EXPERIMENT)
-    with mlflow.start_run(run_name="xgboost_v1"):
+    with mlflow.start_run(run_name=run_name):
         model = XGBClassifier(**PARAMS, eval_metric="logloss")
         model.fit(X_train, y_train)
         proba = model.predict_proba(X_test)[:, 1]
         metrics = evaluate(y_test, (proba >= 0.5).astype(int), proba)
 
-        mlflow.log_params({**PARAMS, "features": ",".join(FEATURES),
+        mlflow.log_params({**PARAMS, "features": ",".join(features),
                            "cutoff_date": str(cutoff.date()),
                            "train_rows": len(train), "test_rows": len(test)})
         mlflow.log_metrics({f"model_{k}": v for k, v in metrics.items()})
         mlflow.log_metrics({f"baseline_{k}": v for k, v in baseline.items()})
-        importance = pd.Series(model.feature_importances_, index=FEATURES).sort_values(ascending=False)
+        importance = pd.Series(model.feature_importances_, index=features).sort_values(ascending=False)
         mlflow.log_dict(importance.round(4).to_dict(), "feature_importance.json")
         mlflow.xgboost.log_model(model, name="model")
 
