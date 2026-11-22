@@ -1,15 +1,13 @@
 """Chargement des fichiers bruts : cours -> PostgreSQL, articles -> MongoDB."""
 import json
 import logging
-import os
 from pathlib import Path
 
 import pandas as pd
 import psycopg
-from dotenv import load_dotenv
-from pymongo import MongoClient, UpdateOne
+from pymongo import UpdateOne
 
-load_dotenv()  # lit les identifiants dans le fichier .env
+from src.db import mongo_db, pg_conninfo
 
 PRICES_DIR = Path("data/raw/prices")
 NEWS_DIR = Path("data/raw/news")
@@ -43,11 +41,7 @@ def load_prices() -> None:
     columns = ["date", "ticker", "company", *PRICE_COLUMNS, "volume"]
     rows = df[columns].to_dict("split")["data"]  # convertit en types Python simples
 
-    conninfo = (
-        f"host=localhost port={os.environ['POSTGRES_PORT']} dbname={os.environ['POSTGRES_DB']} "
-        f"user={os.environ['POSTGRES_USER']} password={os.environ['POSTGRES_PASSWORD']}"
-    )
-    with psycopg.connect(conninfo) as conn, conn.cursor() as cur:
+    with psycopg.connect(pg_conninfo()) as conn, conn.cursor() as cur:
         cur.executemany(UPSERT_PRICES, rows)
         cur.execute("SELECT count(*) FROM prices")
         total = cur.fetchone()[0]
@@ -60,15 +54,9 @@ def load_news() -> None:
     with path.open(encoding="utf-8") as file:
         articles = [json.loads(line) for line in file if line.strip()]
 
-    client = MongoClient(
-        host="localhost", port=int(os.environ['MONGO_PORT']),
-        username=os.environ["MONGO_USER"], password=os.environ["MONGO_PASSWORD"],
-        authSource="admin",
-    )
-    collection = client["marketpulse"]["articles_raw"]
+    collection = mongo_db()["articles_raw"]
     # un même article peut concerner deux entreprises : unicité sur (lien, action)
     collection.create_index([("link", 1), ("ticker", 1)], unique=True)
-
     operations = [
         UpdateOne({"link": a["link"], "ticker": a["ticker"]}, {"$set": a}, upsert=True)
         for a in articles
@@ -77,7 +65,6 @@ def load_news() -> None:
     log.info("MongoDB : %d nouveaux articles, %d déjà présents, %d au total",
              result.upserted_count, result.matched_count,
              collection.count_documents({}))
-    client.close()
 
 
 def main() -> None:

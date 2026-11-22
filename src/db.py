@@ -10,7 +10,7 @@ load_dotenv()
 def pg_conninfo() -> str:
     """Chaîne de connexion à PostgreSQL."""
     return (
-        f"host=localhost port={os.environ['POSTGRES_PORT']} "
+        f"host=127.0.0.1 port={os.environ['POSTGRES_PORT']} "
         f"dbname={os.environ['POSTGRES_DB']} user={os.environ['POSTGRES_USER']} "
         f"password={os.environ['POSTGRES_PASSWORD']}"
     )
@@ -19,7 +19,7 @@ def pg_conninfo() -> str:
 def mongo_db():
     """Base MongoDB du projet."""
     client = MongoClient(
-        host="localhost", port=27017,
+        host="127.0.0.1", port=int(os.environ["MONGO_PORT"]),
         username=os.environ["MONGO_USER"], password=os.environ["MONGO_PASSWORD"],
         authSource="admin",
     )
