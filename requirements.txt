@@ -11,3 +11,6 @@ sqlalchemy
 torch
 transformers
 lingua-language-detector
+xgboost
+scikit-learn
+mlflow

@@ -6,3 +6,5 @@ data/
 .ipynb_checkpoints/
 mlruns/
 .DS_Store
+mlflow.db
+models/
