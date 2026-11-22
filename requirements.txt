@@ -8,3 +8,6 @@ pymongo
 jupyter
 matplotlib
 sqlalchemy
+torch
+transformers
+lingua-language-detector
