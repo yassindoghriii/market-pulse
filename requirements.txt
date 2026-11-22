@@ -3,3 +3,5 @@ feedparser
 pandas
 python-dotenv
 pytest
+psycopg[binary]
+pymongo
