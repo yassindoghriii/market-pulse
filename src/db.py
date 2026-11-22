@@ -24,3 +24,12 @@ def mongo_db():
         authSource="admin",
     )
     return client["marketpulse"]
+
+
+def pg_engine():
+    """Connexion SQLAlchemy à PostgreSQL (utilisée par pandas.read_sql)."""
+    from sqlalchemy import create_engine
+    return create_engine(
+        f"postgresql+psycopg://{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}"
+        f"@127.0.0.1:{os.environ['POSTGRES_PORT']}/{os.environ['POSTGRES_DB']}"
+    )
