@@ -1,0 +1,8 @@
+yfinance
+feedparser
+pandas
+python-dotenv
+psycopg[binary]
+pymongo
+transformers
+lingua-language-detector
